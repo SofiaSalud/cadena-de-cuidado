@@ -95,6 +95,8 @@ WITH
             services.uuid,
             services.cpt,
             services.diagnosis_icd,
+            services.provided_by_object_id,
+            services.provided_by_content_type_id,
 
             services.updated_at AS services_date,
             services.occurrence_date AS services_occurrence_date,
@@ -145,6 +147,8 @@ SELECT
     events_db.eventcomment_author_id,
     events_db.caseeventsummary_author_id,
     services_db.uuid,
+    services_db.provided_by_object_id,
+    services_db.provided_by_content_type_id,
 
     -- Disease
     services_db.cpt,
