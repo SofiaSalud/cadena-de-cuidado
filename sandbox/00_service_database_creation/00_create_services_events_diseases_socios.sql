@@ -26,6 +26,7 @@ WITH
             caseevent.origin_diagnosis_icd AS case_event_origin_diagnosis_icd,
 
             caseevent.updated_at AS caseevent_date,
+
             caseevent.occurrence_date AS caseevent_occurrence_date,
 
             caseevent.state,
@@ -79,10 +80,10 @@ WITH
             caseevent.member_id IS NOT NULL
             AND caseevent.disease_case_id IS NOT NULL
             AND caseevent.id IS NOT NULL
-            AND caseevent.deleted IS NULL
-            AND eventcomment.deleted IS NULL
-            AND caseeventsummary.deleted IS NULL
-            AND caseeventfinalletterdata.deleted IS NULL
+            AND caseevent.deleted = 'None'
+            AND (eventcomment.deleted = 'None' OR eventcomment.deleted IS NULL)
+            AND (caseeventsummary.deleted = 'None' OR caseeventsummary.deleted IS NULL)
+            AND (caseeventfinalletterdata.deleted = 'None' OR caseeventfinalletterdata.deleted IS NULL)
     ),
     services_db AS (
         SELECT
@@ -132,15 +133,99 @@ WITH
             AND services.health_plan_id IS NOT NULL
             AND services.uuid IS NOT NULL
             AND services.deleted IS NULL
-            AND servicecomment.deleted IS NULL
+            AND (servicecomment.deleted = 'None' OR servicecomment.deleted IS NULL)
+            AND process_state != 'CANCELLED'
     )
 
+
 SELECT
+  -- ID
+  member_id,
+  service_id,
+  disease_case_id,
+  disease_case_id_from_event,
+  diseasecase_db.disease_case_id AS disease_case_id_from_dc,
+  case_event_id,
+  case_event_id_from_event,
+  related_service_id,
+  health_plan_id,
+  servicecomment_author_id,
+  eventcomment_author_id,
+  caseeventsummary_author_id,
+  uuid,
+  provided_by_object_id,
+  provided_by_content_type_id,
+
+  -- Disease
+  cpt,
+  diagnosis_icd,
+  case_event_origin_diagnosis_icd,
+  diseasecase_db.disease_origin_diagnosis_icd,
+  cie_codes,
+  cie_descriptions,
+  cpt_codes,
+  cpt_descriptions,
+
+  -- Date
+  services_date,
+  services_occurrence_date,
+  servicecomment_date,
+  caseevent_date,
+  caseevent_occurrence_date,
+  eventcomment_date,
+  caseeventsummary_date,
+  caseeventfinalletterdata_date,
+  diseasecase_db.diseasecase_date,
+
+  -- State
+  process_state,
+  state,
+  medically_justified,
+  stage,
+  member_stage,
+  closed,
+  automatic_ruling_score,
+  suggested_ruling_state,
+
+  -- Categories
+  service_type_value,
+  caseevent_category,
+  event_class,
+  caseeventsummary_category,
+
+  -- Text
+  diagnosis_description,
+  services_comments,
+  service_description,
+  specification,
+  medical_recommendation_notes,
+  servicecomment_comments,
+  eventcomment_comments,
+  observations,
+  diseasecase_db.medical_description,
+  diseasecase_db.diseasecase_description,
+
+  -- Other
+  assessment,
+  medical_pre_dictamination_notes,
+  discharge_ruling_notes,
+  administrative_ruling_notes,
+  caseevent_description,
+  internal_notes,
+  requested_partner_doctor_info,
+  relevant_history,    
+  discharge_reason,
+  quote_and_scheduling_ruling_notes,
+  medical_procedure_ruling_notes
+FROM(
+  SELECT
     -- ID
     services_db.member_id,
     services_db.service_id,
     services_db.disease_case_id,
+    events_db.disease_case_id AS disease_case_id_from_event,
     services_db.case_event_id,
+    events_db.case_event_id AS case_event_id_from_event,
     services_db.related_service_id,
     services_db.health_plan_id,
     services_db.servicecomment_author_id,
@@ -154,7 +239,6 @@ SELECT
     services_db.cpt,
     services_db.diagnosis_icd,
     events_db.case_event_origin_diagnosis_icd,
-    diseasecase_db.disease_origin_diagnosis_icd,
     events_db.cie_codes,
     events_db.cie_descriptions,
     events_db.cpt_codes,
@@ -169,7 +253,6 @@ SELECT
     events_db.eventcomment_date,
     events_db.caseeventsummary_date,
     events_db.caseeventfinalletterdata_date,
-    diseasecase_db.diseasecase_date,
 
     -- State
     services_db.process_state,
@@ -196,8 +279,6 @@ SELECT
     services_db.servicecomment_comments,
     events_db.eventcomment_comments,
     events_db.observations,
-    diseasecase_db.medical_description,
-    diseasecase_db.diseasecase_description,
 
     -- Other
     events_db.assessment,
@@ -211,12 +292,19 @@ SELECT
     events_db.discharge_reason,
     events_db.quote_and_scheduling_ruling_notes,
     events_db.medical_procedure_ruling_notes
-
-FROM
-    services_db
-FULL JOIN
-    events_db
-USING(member_id, disease_case_id, case_event_id)
+  FROM
+      services_db
+  FULL JOIN
+      events_db
+  USING(member_id, case_event_id)
+)
 FULL JOIN
     diseasecase_db
 USING(member_id, disease_case_id)
+WHERE
+  member_id IS NOT NULL
+  AND service_id IS NOT NULL
+  AND disease_case_id IS NOT NULL
+  AND diseasecase_db.disease_case_id IS NOT NULL
+  AND disease_case_id = diseasecase_db.disease_case_id
+  AND (case_event_id = case_event_id_from_event OR (case_event_id IS NULL AND case_event_id_from_event IS NULL))

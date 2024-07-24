@@ -129,7 +129,7 @@ WITH
             AND med_note.id IS NOT NULL
             AND medical_history_id IS NOT NULL
             AND med_note.uuid IS NOT NULL
-            AND (med_note.deleted = 'None' OR med_note.deleted IS NULL)
+            AND med_note.deleted = 'None'
             AND (providers_doctor.deleted = 'None' OR providers_doctor.deleted IS NULL)
             AND providers_doctorspecialistdetail.deleted IS NULL
             AND med_explo.deleted IS NULL
@@ -215,13 +215,14 @@ WITH
             AND deleted IS NULL
     )
 
-SELECT 
+
+SELECT
     -- ID
-    member_id,
-    disease_case_id,
-    case_event_id,
-    service_id,
-    uuid AS med_note_uuid,
+    med_notes.member_id,
+    med_notes.disease_case_id,
+    med_notes.case_event_id,
+    med_notes.service_id,
+    med_notes.med_note_uuid,
 
     --member_name,
     --doctor_name,
@@ -231,119 +232,238 @@ SELECT
     --specialist_number,
 
     -- Diseases
-    diagnosis,
-    evaluation_cie_keys,
-    evaluation_diagnostics,
-    evaluation_diagnostic_impression,
-    specialization,
-    interrogation_system,
-    interrogation_system_name,
-    interrogation_notes,
-    exam_notes,
+    consult_prescription.diagnosis,
+    med_notes.evaluation_cie_keys,
+    med_notes.evaluation_diagnostics,
+    med_notes.evaluation_diagnostic_impression,
+    consult_prescription.specialization,
+    med_notes.interrogation_system,
+    med_notes.interrogation_system_name,
+    med_notes.interrogation_notes,
+    med_notes.exam_notes,
 
     -- Dates
-    med_note_date,
-    exam_physical_date,
-    exam_date,
-    exam_obstetric_date,
-    addendum_date,
-    interrogation_date,
-    scheduledprocedure_date,
-    dischargeinfo_date,
-    discharge_date,
-    evaluation_date,
-    medical_procedure_date,
-    consult_prescription_date,
-    med_history_date,
+    med_notes.med_note_date,
+    med_notes.exam_physical_date,
+    med_notes.exam_date,
+    med_notes.exam_obstetric_date,
+    med_notes.addendum_date,
+    med_notes.interrogation_date,
+    med_notes.scheduledprocedure_date,
+    med_notes.dischargeinfo_date,
+    med_notes.discharge_date,
+    med_notes.evaluation_date,
+    med_notes.medical_procedure_date,
+    consult_prescription.consult_prescription_date,
+    med_notes.med_history_date,
 
     -- Categories, Names
-    med_note_type,
-    med_note_motive,
-    state,
-    med_explo_segment_name,
-    med_explo_segment,
-    scheduledprocedure_procedure_name,
-    medical_procedure_name,
-    medical_procedure,
-    pathologies_state,
-    surgeries_state,
-    vaccines_state,
-    hospitalizations_state,
-    allergies_state,
-    malformations_state,
-    family_pathologies_state,
-    mental_health_psychology_state,
-    mental_health_psychiatry_state,
-    signed,
-    doctor_specialization,
+    med_notes.med_note_type,
+    med_notes.med_note_motive,
+    med_notes.state,
+    med_notes.med_explo_segment_name,
+    med_notes.med_explo_segment,
+    med_notes.scheduledprocedure_procedure_name,
+    med_notes.medical_procedure_name,
+    med_notes.medical_procedure,
+    med_notes.pathologies_state,
+    med_notes.surgeries_state,
+    med_notes.vaccines_state,
+    med_notes.hospitalizations_state,
+    med_notes.allergies_state,
+    med_notes.malformations_state,
+    med_notes.family_pathologies_state,
+    med_notes.mental_health_psychology_state,
+    med_notes.mental_health_psychiatry_state,
+    consult_prescription.signed,
+    med_notes.doctor_specialization,
 
     -- Dichotomous, Values
-    has_gynecological_exams,
-    has_been_pregnant,
-    has_menstrual_cycle,
-    has_birth_control,
-    has_therapy,
-    has_antibiotics,
-    scheduledprocedure_is_urgent,
-    scheduledprocedure_in_hospital,
-    scheduledprocedure_has_extra_requirements,
-    dischargeinfo_visits_amount,
+    med_notes.has_gynecological_exams,
+    med_notes.has_been_pregnant,
+    med_notes.has_menstrual_cycle,
+    med_notes.has_birth_control,
+    med_notes.has_therapy,
+    consult_prescription.has_antibiotics,
+    med_notes.scheduledprocedure_is_urgent,
+    med_notes.scheduledprocedure_in_hospital,
+    med_notes.scheduledprocedure_has_extra_requirements,
+    med_notes.dischargeinfo_visits_amount,
 
     -- Text
-    health_summary,
-    recommendations,
-    suffering,
-    med_explo_notes,
-    exam_physical_notes,
-    addendum_notes,
-    therapy_notes,
-    pathologies_notes,
-    surgeries_notes,
-    vaccines_notes,
-    hospitalizations_notes,
-    allergies_notes,
-    malformations_notes,
-    family_pathologies_notes,
-    mental_health_psychology_notes,
-    mental_health_psychiatry_notes,
-    medicines_notes,
-    evaluation_notes,
-    scheduledprocedure_medical_reason,
-    scheduledprocedure_extra_requirements,
-    dischargeinfo_stay_summary,
-    dischargeinfo_evolution,
-    dischargeinfo_discharge_reason,
-    medical_procedure_description,
+    med_notes.health_summary,
+    consult_prescription.recommendations,
+    med_notes.suffering,
+    med_notes.med_explo_notes,
+    med_notes.exam_physical_notes,
+    med_notes.addendum_notes,
+    med_notes.therapy_notes,
+    med_notes.pathologies_notes,
+    med_notes.surgeries_notes,
+    med_notes.vaccines_notes,
+    med_notes.hospitalizations_notes,
+    med_notes.allergies_notes,
+    med_notes.malformations_notes,
+    med_notes.family_pathologies_notes,
+    med_notes.mental_health_psychology_notes,
+    med_notes.mental_health_psychiatry_notes,
+    med_notes.medicines_notes,
+    med_notes.evaluation_notes,
+    med_notes.scheduledprocedure_medical_reason,
+    med_notes.scheduledprocedure_extra_requirements,
+    med_notes.dischargeinfo_stay_summary,
+    med_notes.dischargeinfo_evolution,
+    med_notes.dischargeinfo_discharge_reason,
+    med_notes.medical_procedure_description,
 
     -- Procedures
-    procedurecategory_name,
-    procedurecategory_description,
-    procedurecategory_is_scheduled,
-    procedurecategory_type,
-    procedurecategory_cpt_key,
-    providers_medicalspecialization_name,
-    providers_medicalspecialization_description,
-    providers_medicalspecialization_type,
-    providers_medicalspecialization_is_primary_care,
-    
+    med_notes.procedurecategory_name,
+    med_notes.procedurecategory_description,
+    med_notes.procedurecategory_is_scheduled,
+    med_notes.procedurecategory_type,
+    med_notes.procedurecategory_cpt_key,
+    med_notes.providers_medicalspecialization_name,
+    med_notes.providers_medicalspecialization_description,
+    med_notes.providers_medicalspecialization_type,
+    med_notes.providers_medicalspecialization_is_primary_care,
+
     -- Raw
-    last_huli_sync_snapshot,
-    prescription_items_json,
-    prescription_items_member_checks,
+    med_notes.last_huli_sync_snapshot,
+    consult_prescription.prescription_items_json,
+    consult_prescription.prescription_items_member_checks,
 
     -- Other
-    medical_procedure_pathology_sending_required,
-    references_check, 
-    checkups_check,
-    labs_check, 
-    medicines_check, 
-    urgencies_check 
+    med_notes.medical_procedure_pathology_sending_required,
+    consult_prescription.references_check, 
+    consult_prescription.checkups_check,
+    consult_prescription.labs_check, 
+    consult_prescription.medicines_check, 
+    consult_prescription.urgencies_check 
+FROM(
+    SELECT 
+        -- ID
+        emr_member_med_notes.member_id,
+        emr_member_med_notes.disease_case_id,
+        emr_member_med_notes.case_event_id,
+        emr_member_med_notes.service_id,
+        emr_member_med_notes.uuid AS med_note_uuid,
+        emr_member_med_notes.medical_note_id,
 
-FROM
-    emr_member_med_notes
-FULL JOIN
-    med_history
-USING(member_id, medical_history_id)
+        --member_name,
+        --doctor_name,
+        --license_number,
+        --license_institution,
+        --specialist_institution,
+        --specialist_number,
+
+        -- Diseases
+        emr_member_med_notes.evaluation_cie_keys,
+        emr_member_med_notes.evaluation_diagnostics,
+        emr_member_med_notes.evaluation_diagnostic_impression,
+        emr_member_med_notes.interrogation_system,
+        emr_member_med_notes.interrogation_system_name,
+        emr_member_med_notes.interrogation_notes,
+        emr_member_med_notes.exam_notes,
+
+        -- Dates
+        emr_member_med_notes.med_note_date,
+        emr_member_med_notes.exam_physical_date,
+        emr_member_med_notes.exam_date,
+        emr_member_med_notes.exam_obstetric_date,
+        emr_member_med_notes.addendum_date,
+        emr_member_med_notes.interrogation_date,
+        emr_member_med_notes.scheduledprocedure_date,
+        emr_member_med_notes.dischargeinfo_date,
+        emr_member_med_notes.discharge_date,
+        emr_member_med_notes.evaluation_date,
+        emr_member_med_notes.medical_procedure_date,
+        med_history.med_history_date,
+
+        -- Categories, Names
+        emr_member_med_notes.med_note_type,
+        emr_member_med_notes.med_note_motive,
+        emr_member_med_notes.state,
+        emr_member_med_notes.med_explo_segment_name,
+        emr_member_med_notes.med_explo_segment,
+        emr_member_med_notes.scheduledprocedure_procedure_name,
+        emr_member_med_notes.medical_procedure_name,
+        emr_member_med_notes.medical_procedure,
+        med_history.pathologies_state,
+        med_history.surgeries_state,
+        med_history.vaccines_state,
+        med_history.hospitalizations_state,
+        med_history.allergies_state,
+        med_history.malformations_state,
+        med_history.family_pathologies_state,
+        med_history.mental_health_psychology_state,
+        med_history.mental_health_psychiatry_state,
+        emr_member_med_notes.doctor_specialization,
+
+        -- Dichotomous, Values
+        emr_member_med_notes.has_gynecological_exams,
+        emr_member_med_notes.has_been_pregnant,
+        emr_member_med_notes.has_menstrual_cycle,
+        emr_member_med_notes.has_birth_control,
+        med_history.has_therapy,
+        emr_member_med_notes.scheduledprocedure_is_urgent,
+        emr_member_med_notes.scheduledprocedure_in_hospital,
+        emr_member_med_notes.scheduledprocedure_has_extra_requirements,
+        emr_member_med_notes.dischargeinfo_visits_amount,
+
+        -- Text
+        med_history.health_summary,
+        emr_member_med_notes.suffering,
+        emr_member_med_notes.med_explo_notes,
+        emr_member_med_notes.exam_physical_notes,
+        emr_member_med_notes.addendum_notes,
+        med_history.therapy_notes,
+        med_history.pathologies_notes,
+        med_history.surgeries_notes,
+        med_history.vaccines_notes,
+        med_history.hospitalizations_notes,
+        med_history.allergies_notes,
+        med_history.malformations_notes,
+        med_history.family_pathologies_notes,
+        med_history.mental_health_psychology_notes,
+        med_history.mental_health_psychiatry_notes,
+        med_history.medicines_notes,
+        emr_member_med_notes.evaluation_notes,
+        emr_member_med_notes.scheduledprocedure_medical_reason,
+        emr_member_med_notes.scheduledprocedure_extra_requirements,
+        emr_member_med_notes.dischargeinfo_stay_summary,
+        emr_member_med_notes.dischargeinfo_evolution,
+        emr_member_med_notes.dischargeinfo_discharge_reason,
+        emr_member_med_notes.medical_procedure_description,
+
+        -- Procedures
+        emr_member_med_notes.procedurecategory_name,
+        emr_member_med_notes.procedurecategory_description,
+        emr_member_med_notes.procedurecategory_is_scheduled,
+        emr_member_med_notes.procedurecategory_type,
+        emr_member_med_notes.procedurecategory_cpt_key,
+        emr_member_med_notes.providers_medicalspecialization_name,
+        emr_member_med_notes.providers_medicalspecialization_description,
+        emr_member_med_notes.providers_medicalspecialization_type,
+        emr_member_med_notes.providers_medicalspecialization_is_primary_care,
+
+        -- Raw
+        med_history.last_huli_sync_snapshot,
+
+        -- Other
+        emr_member_med_notes.medical_procedure_pathology_sending_required,
+
+    FROM
+        emr_member_med_notes
+    FULL JOIN
+        med_history
+    USING(member_id, medical_history_id)
+) AS med_notes
 LEFT JOIN
     consult_prescription
 USING(member_id, medical_note_id)
+WHERE
+    member_id IS NOT NULL
+    AND med_notes.member_id IS NOT NULL
+    AND med_notes.disease_case_id IS NOT NULL
+    AND med_notes.service_id IS NOT NULL
+    AND med_note_uuid IS NOT NULL 
