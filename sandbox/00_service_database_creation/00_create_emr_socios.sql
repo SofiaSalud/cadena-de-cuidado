@@ -1,15 +1,34 @@
 CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.emr_socios` AS 
 
 WITH    
+    scheduledprocedure_db AS (
+        SELECT
+            MAX_BY(case_event_id, updated_at) AS case_event_id,
+            MAX_BY(updated_at, updated_at) AS updated_at,
+            MAX_BY(is_urgent, updated_at) AS is_urgent,
+            MAX_BY(in_hospital, updated_at) AS in_hospital,
+            MAX_BY(medical_reason, updated_at) AS medical_reason,
+            MAX_BY(procedure_name, updated_at) AS procedure_name,
+            MAX_BY(has_extra_requirements, updated_at) AS has_extra_requirements,
+            MAX_BY(extra_requirements, updated_at) AS extra_requirements,
+            MAX_BY(stay_days, updated_at) AS stay_days,
+            MAX_BY(medical_note_id, updated_at) AS medical_note_id,
+            MAX_BY(procedure_category_id, updated_at) AS procedure_category_id,
+            
+        FROM
+            `sofia-data-305018.backend_db_20240702.emr_scheduledprocedure`
+        WHERE   
+            deleted IS NULL
+    ),
     emr_member_med_notes AS (
         SELECT DISTINCT
             med_note.member_id AS member_id,
             med_note.service_id AS service_id,
             med_note.disease_case_id AS disease_case_id,
-            scheduledprocedure.case_event_id,
+            scheduledprocedure_db.case_event_id,
             med_note.id AS medical_note_id,
             exam.medical_history_id AS medical_history_id,
-            med_note.uuid,
+            --med_note.uuid,
 
             providers_doctor.descriptor AS doctor_specialization,
 
@@ -43,14 +62,14 @@ WITH
             interrogation.system AS interrogation_system,
             interrogation.system_name AS interrogation_system_name,
 
-            scheduledprocedure.updated_at AS  scheduledprocedure_date,
-            scheduledprocedure.is_urgent AS scheduledprocedure_is_urgent,
-            scheduledprocedure.in_hospital AS scheduledprocedure_in_hospital,
-            scheduledprocedure.medical_reason AS scheduledprocedure_medical_reason,
-            scheduledprocedure.procedure_name AS scheduledprocedure_procedure_name,
-            scheduledprocedure.has_extra_requirements AS scheduledprocedure_has_extra_requirements,
-            scheduledprocedure.extra_requirements AS scheduledprocedure_extra_requirements,
-            scheduledprocedure.stay_days AS scheduledprocedure_stay_days,
+            scheduledprocedure_db.updated_at AS  scheduledprocedure_date,
+            scheduledprocedure_db.is_urgent AS scheduledprocedure_is_urgent,
+            scheduledprocedure_db.in_hospital AS scheduledprocedure_in_hospital,
+            scheduledprocedure_db.medical_reason AS scheduledprocedure_medical_reason,
+            scheduledprocedure_db.procedure_name AS scheduledprocedure_procedure_name,
+            scheduledprocedure_db.has_extra_requirements AS scheduledprocedure_has_extra_requirements,
+            scheduledprocedure_db.extra_requirements AS scheduledprocedure_extra_requirements,
+            scheduledprocedure_db.stay_days AS scheduledprocedure_stay_days,
             emr_procedurecategory.name AS procedurecategory_name,
             emr_procedurecategory.description AS procedurecategory_description,
             emr_procedurecategory.is_scheduled AS procedurecategory_is_scheduled,
@@ -79,11 +98,13 @@ WITH
             medical_procedure.procedure AS medical_procedure,
             medical_procedure.description AS medical_procedure_description,
             medical_procedure.pathology_sending_required AS medical_procedure_pathology_sending_required
+            -- proveedor solo es medico porque es el que describe la nota medica
+
         FROM    
             `sofia-data-305018.backend_db_20240702.emr_medicalnote` AS med_note
         LEFT JOIN
             `sofia-data-305018.backend_db_20240702.providers_doctor` AS providers_doctor
-        ON med_note.doctor_id = providers_doctor.id
+        ON med_note.doctor_id = providers_doctor.id 
 	    LEFT JOIN 
             `sofia-data-305018.backend_db_20240702.providers_doctorspecialistdetail` AS providers_doctorspecialistdetail 
         ON providers_doctorspecialistdetail.doctor_id = providers_doctor.id
@@ -100,17 +121,17 @@ WITH
             `sofia-data-305018.backend_db_20240702.emr_obstetricgynecologicalinfo` AS exam_obstetric
         ON med_note.id = exam_obstetric.medical_note_id
         LEFT JOIN
-            `sofia-data-305018.backend_db_20240702.emr_addendum` AS addendum
+            `sofia-data-305018.backend_db_20240702.emr_addendum` AS addendum -- Verificar
         ON med_note.id = addendum.medical_note_id
         LEFT JOIN
             `sofia-data-305018.backend_db_20240702.emr_interrogation` AS interrogation
         ON med_note.id = interrogation.medical_note_id
         LEFT JOIN
-            `sofia-data-305018.backend_db_20240702.emr_scheduledprocedure` AS scheduledprocedure
-        ON med_note.id = scheduledprocedure.medical_note_id
+            scheduledprocedure_db
+        ON med_note.id = scheduledprocedure_db.medical_note_id
         LEFT JOIN
             `sofia-data-305018.backend_db_20240702.emr_procedurecategory` AS emr_procedurecategory
-        ON emr_procedurecategory.id = scheduledprocedure.procedure_category_id
+        ON emr_procedurecategory.id = scheduledprocedure_db.procedure_category_id
         LEFT JOIN
             `sofia-data-305018.backend_db_20240702.providers_medicalspecialization` AS providers_medicalspecialization 
         ON providers_medicalspecialization.id = emr_procedurecategory.medical_specialization_id AND providers_medicalspecialization.id = providers_doctorspecialistdetail.medical_specialization_id
@@ -127,13 +148,11 @@ WITH
             service_id IS NOT NULL
             AND disease_case_id IS NOT NULL
             AND med_note.id IS NOT NULL
-            AND medical_history_id IS NOT NULL
-            AND med_note.uuid IS NOT NULL
+            --AND med_note.uuid IS NOT NULL
             AND med_note.deleted = 'None'
             AND (providers_doctor.deleted = 'None' OR providers_doctor.deleted IS NULL)
             AND providers_doctorspecialistdetail.deleted IS NULL
             AND med_explo.deleted IS NULL
-            AND scheduledprocedure.deleted IS NULL
             AND exam.deleted IS NULL
             AND addendum.deleted IS NULL
             AND interrogation.deleted IS NULL
@@ -222,7 +241,7 @@ SELECT
     med_notes.disease_case_id,
     med_notes.case_event_id,
     med_notes.service_id,
-    med_notes.med_note_uuid,
+    ----med_notes.med_note_uuid,
 
     --member_name,
     --doctor_name,
@@ -346,7 +365,7 @@ FROM(
         emr_member_med_notes.disease_case_id,
         emr_member_med_notes.case_event_id,
         emr_member_med_notes.service_id,
-        emr_member_med_notes.uuid AS med_note_uuid,
+        ----emr_member_med_notes.uuid --AS med_note_uuid,
         emr_member_med_notes.medical_note_id,
 
         --member_name,
@@ -466,4 +485,3 @@ WHERE
     AND med_notes.member_id IS NOT NULL
     AND med_notes.disease_case_id IS NOT NULL
     AND med_notes.service_id IS NOT NULL
-    AND med_note_uuid IS NOT NULL 
