@@ -1,6 +1,24 @@
 CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.emr_socios` AS 
 
 WITH    
+    dr_specializations AS (
+        SELECT
+            doctor_id,
+            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT pdms.name IGNORE NULLS), ', ') AS doctor_specializations,
+            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT pdms.description IGNORE NULLS), ', ') AS doctor_specializations_description,
+            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT pdms.type IGNORE NULLS), ', ') AS doctor_specializations_type,
+            MAX(pdms.is_primary_care) AS doctor_specializations_is_primary_care,
+
+        FROM 
+            `sofia-data-305018.backend_db_20240702.providers_doctorspecialistdetail` AS sp
+        LEFT JOIN 
+            `sofia-data-305018.backend_db_20240702.providers_medicalspecialization` AS pdms 
+        ON pdms.id = sp.medical_specialization_id
+        WHERE
+            sp.deleted IS NULL
+            AND pdms.deleted IS NULL
+        GROUP BY doctor_id
+    ),
     scheduledprocedure_db AS (
         SELECT
             MAX_BY(case_event_id, updated_at) AS case_event_id,
@@ -29,8 +47,6 @@ WITH
             med_note.id AS medical_note_id,
             exam.medical_history_id AS medical_history_id,
             --med_note.uuid,
-
-            providers_doctor.descriptor AS doctor_specialization,
 
             med_note.updated_at AS med_note_date,
             med_note.note_type AS med_note_type,
@@ -75,10 +91,10 @@ WITH
             emr_procedurecategory.is_scheduled AS procedurecategory_is_scheduled,
             emr_procedurecategory.type AS procedurecategory_type,
             emr_procedurecategory.cpt_key AS procedurecategory_cpt_key,
-            providers_medicalspecialization.name AS providers_medicalspecialization_name,
-            providers_medicalspecialization.description AS providers_medicalspecialization_description,
-            providers_medicalspecialization.type AS providers_medicalspecialization_type,
-            providers_medicalspecialization.is_primary_care AS providers_medicalspecialization_is_primary_care,
+            doctor_specializations,
+            doctor_specializations_description,
+            doctor_specializations_type,
+            doctor_specializations_is_primary_care,
 
             dischargeinfo.updated_at AS dischargeinfo_date,
             dischargeinfo.discharge_date AS discharge_date,
@@ -106,8 +122,8 @@ WITH
             `sofia-data-305018.backend_db_20240702.providers_doctor` AS providers_doctor
         ON med_note.doctor_id = providers_doctor.id 
 	    LEFT JOIN 
-            `sofia-data-305018.backend_db_20240702.providers_doctorspecialistdetail` AS providers_doctorspecialistdetail 
-        ON providers_doctorspecialistdetail.doctor_id = providers_doctor.id
+            dr_specializations
+        ON dr_specializations.doctor_id = providers_doctor.id
         LEFT JOIN
             `sofia-data-305018.backend_db_20240702.emr_exploration` AS med_explo
         ON med_note.id = med_explo.medical_note_id
@@ -133,9 +149,6 @@ WITH
             `sofia-data-305018.backend_db_20240702.emr_procedurecategory` AS emr_procedurecategory
         ON emr_procedurecategory.id = scheduledprocedure_db.procedure_category_id
         LEFT JOIN
-            `sofia-data-305018.backend_db_20240702.providers_medicalspecialization` AS providers_medicalspecialization 
-        ON providers_medicalspecialization.id = emr_procedurecategory.medical_specialization_id AND providers_medicalspecialization.id = providers_doctorspecialistdetail.medical_specialization_id
-        LEFT JOIN
             `sofia-data-305018.backend_db_20240702.emr_dischargeinfo` AS dischargeinfo
         ON med_note.id = dischargeinfo.medical_note_id
         LEFT JOIN
@@ -148,10 +161,8 @@ WITH
             service_id IS NOT NULL
             AND disease_case_id IS NOT NULL
             AND med_note.id IS NOT NULL
-            --AND med_note.uuid IS NOT NULL
             AND med_note.deleted = 'None'
             AND (providers_doctor.deleted = 'None' OR providers_doctor.deleted IS NULL)
-            AND providers_doctorspecialistdetail.deleted IS NULL
             AND med_explo.deleted IS NULL
             AND exam.deleted IS NULL
             AND addendum.deleted IS NULL
@@ -159,7 +170,6 @@ WITH
             AND (exam_physical.deleted = 'None' OR exam_physical.deleted IS NULL)
             AND (exam_obstetric.deleted = 'None' OR exam_obstetric.deleted IS NULL)
             AND (emr_procedurecategory.deleted = 'None' OR emr_procedurecategory.deleted IS NULL)
-            AND providers_medicalspecialization.deleted IS NULL
             AND (evaluation.deleted = 'None' OR evaluation.deleted IS NULL)
             AND (medical_procedure.deleted = 'None' OR medical_procedure.deleted IS NULL)
             AND (dischargeinfo.deleted = 'None' OR dischargeinfo.deleted IS NULL)
@@ -295,7 +305,10 @@ SELECT
     med_notes.mental_health_psychology_state,
     med_notes.mental_health_psychiatry_state,
     consult_prescription.signed,
-    med_notes.doctor_specialization,
+    med_notes.doctor_specializations,
+    med_notes.doctor_specializations_description,
+    med_notes.doctor_specializations_type,
+    med_notes.doctor_specializations_is_primary_care,
 
     -- Dichotomous, Values
     med_notes.has_gynecological_exams,
@@ -341,10 +354,6 @@ SELECT
     med_notes.procedurecategory_is_scheduled,
     med_notes.procedurecategory_type,
     med_notes.procedurecategory_cpt_key,
-    med_notes.providers_medicalspecialization_name,
-    med_notes.providers_medicalspecialization_description,
-    med_notes.providers_medicalspecialization_type,
-    med_notes.providers_medicalspecialization_is_primary_care,
 
     -- Raw
     med_notes.last_huli_sync_snapshot,
@@ -416,7 +425,10 @@ FROM(
         med_history.family_pathologies_state,
         med_history.mental_health_psychology_state,
         med_history.mental_health_psychiatry_state,
-        emr_member_med_notes.doctor_specialization,
+        emr_member_med_notes.doctor_specializations,
+        emr_member_med_notes.doctor_specializations_description,
+        emr_member_med_notes.doctor_specializations_type,
+        emr_member_med_notes.doctor_specializations_is_primary_care,
 
         -- Dichotomous, Values
         emr_member_med_notes.has_gynecological_exams,
@@ -460,10 +472,6 @@ FROM(
         emr_member_med_notes.procedurecategory_is_scheduled,
         emr_member_med_notes.procedurecategory_type,
         emr_member_med_notes.procedurecategory_cpt_key,
-        emr_member_med_notes.providers_medicalspecialization_name,
-        emr_member_med_notes.providers_medicalspecialization_description,
-        emr_member_med_notes.providers_medicalspecialization_type,
-        emr_member_med_notes.providers_medicalspecialization_is_primary_care,
 
         -- Raw
         med_history.last_huli_sync_snapshot,
