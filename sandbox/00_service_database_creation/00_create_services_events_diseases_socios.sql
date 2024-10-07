@@ -12,7 +12,11 @@ CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.services_events_diseas
 	disease_case_id INT64 OPTIONS (description = 'Disease case ID'),
 	services_related_service_id INT64 OPTIONS (description = 'Related service ID'),
 	services_health_plan_id INT64 OPTIONS (description = 'Health plan ID'),
-  caseevent_invoice_id INT64 OPTIONS (description = 'Invoice ID'),
+    caseevent_invoice_id INT64 OPTIONS (description = 'Invoice ID'),
+	provider_admin_user_id INT64 OPTIONS (description = 'Provider admin user ID'),
+	doctorfriend_id INT64 OPTIONS (description = 'Doctor friend ID'),
+	doctor_id INT64 OPTIONS (description = 'Doctor ID'),
+	doctor_user_id INT64 OPTIONS (description = 'Doctor user ID'),
 	services_cpt STRING OPTIONS (description = 'CPT codes'),
 	services_diagnosis_icd STRING OPTIONS (description = 'Diagnosis ICD codes'),
 	services_provided_by_object_id INT64 OPTIONS (description = 'Provider ID'),
@@ -50,10 +54,10 @@ CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.services_events_diseas
 	services_occurrence_ts TIMESTAMP OPTIONS (description = 'Service occurrence date'),
 	servicecomment_created_ts TIMESTAMP OPTIONS (description = 'Service comment created date'),
 	caseevent_created_ts TIMESTAMP OPTIONS (description = 'Case event created date'),
-  caseevent_occurrence_ts TIMESTAMP OPTIONS (description = 'Case event occurrence date'),
+    caseevent_occurrence_ts TIMESTAMP OPTIONS (description = 'Case event occurrence date'),
 	caseevent_pause_start_ts TIMESTAMP OPTIONS (description = 'Case event pause start date'),
-  caseevent_discharge_start_ts TIMESTAMP OPTIONS (description = 'Case event discharge start date'),
-  caseevent_medical_monitoring_ts TIMESTAMP OPTIONS (description = 'Case event medical monitoring date'),
+    caseevent_discharge_start_ts TIMESTAMP OPTIONS (description = 'Case event discharge start date'),
+     caseevent_medical_monitoring_ts TIMESTAMP OPTIONS (description = 'Case event medical monitoring date'),
 	eventcomment_created_ts TIMESTAMP OPTIONS (description = 'Event comment created date'),
 	caseeventsummary_created_ts TIMESTAMP OPTIONS (description = 'Case event summary created date'),
 	caseeventfinalletterdata_created_ts TIMESTAMP OPTIONS (description = 'Case event final letter data created date'),
@@ -88,6 +92,7 @@ CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.services_events_diseas
 	provider_name STRING OPTIONS (description = 'Provider name'),
 	provider_category_name STRING OPTIONS (description = 'Provider category name'),
 	provider_state STRING OPTIONS (description = 'Provider state'),
+	provider_contract_category STRING OPTIONS (description = 'Provider contract category'),
 	doctorfriend_name STRING OPTIONS (description = 'External doctor name'),
 	doctor_nickname STRING OPTIONS (description = 'Doctor nickname'), 
 	doctor_name STRING OPTIONS (description = 'Internal doctor name'),
@@ -110,9 +115,21 @@ CREATE OR REPLACE TABLE `sofia-data-305018.cadena_cuidado.services_events_diseas
 	member_weight_kg INT64 OPTIONS (description = 'Member weight in kg'),
 	member_is_represented_by_user_id INT64 OPTIONS (description = 'Member is represented by user ID'),
 	relationship_beneficiary_with_owner STRING OPTIONS (description = 'Relationship beneficiary with owner'),
-	owner_type STRING OPTIONS (description = 'Owner type')
+	owner_type STRING OPTIONS (description = 'Owner type'),
+	electronic_voucher_id INT64 OPTIONS (description = 'Electronic voucher ID'),
+	voucher_item_items STRING OPTIONS (description = 'Voucher item items'),
+	voucher_item_total_items_quantity	INT64 OPTIONS (description = 'Voucher item total items quantity'),
+	voucher_item_total_discount_cents	INT64 OPTIONS (description = 'Voucher item total discount cents'),
+	voucher_item_total_unit_value_cents	INT64 OPTIONS (description = 'Voucher item total unit value cents'),
+	voucher_item_main_item STRING OPTIONS (description = 'Voucher item main item'),
+	voucher_item_list_unit_key STRING OPTIONS (description = 'Voucher item list unit key'),
+	voucher_item_parsed_product_service_key STRING OPTIONS (description = 'Voucher item parsed product service key'),
+	voucher_item_created_ts TIMESTAMP OPTIONS (description = 'Voucher item created at'),
+	voucher_item_is_cancellable BOOL OPTIONS (description = 'Voucher item is cancellable'),
+	voucher_item_list_cancellation_state STRING OPTIONS (description = 'Voucher item list cancellation state'),
+	voucher_item_list_cancellation_reason STRING OPTIONS (description = 'Voucher item list cancellation reason'),
 ) OPTIONS (
-		description = 'Table with services, events and diseases information for members'
+		description = 'Table with services, events and diseases information of members (socios)'
 )
 AS
 
@@ -255,6 +272,33 @@ WITH
       `sofia-data-305018.backend_db_20240702.subscriptions_healthplanapplication` AS hap 
     ON hapi.application_id = hap.id
   ),
+	voucher_item_db AS (
+		SELECT
+			ie_items.electronic_voucher_id,
+      ARRAY_TO_STRING(ARRAY_AGG(DISTINCT CONCAT(ie_items.description, ': ', ie_items.quantity) IGNORE NULLS), ',') AS items,
+      SUM(ie_items.quantity) AS total_items_quantity,
+      SUM(ie_items.discount_cents) AS total_discount_cents,
+      SUM(ie_items.unit_value_cents) AS total_unit_value_cents,
+      MAX_BY(description, quantity) AS main_item,
+      ARRAY_TO_STRING(ARRAY_AGG(DISTINCT ie_items.unit_key IGNORE NULLS), ',') AS list_unit_key,
+			ARRAY_TO_STRING(ARRAY_AGG(DISTINCT IF(ie_items.parsed_product_service_key IN ('None', ''), NULL, ie_items.parsed_product_service_key) IGNORE NULLS), ',') AS parsed_product_service_key,
+			MAX(ie_items.created_at) AS created_at,
+			MAX(CAST(IF(ie.is_cancellable IN ('None', ''), NULL, ie.is_cancellable) AS BOOL)) AS is_cancellable,
+      ARRAY_TO_STRING(ARRAY_AGG(DISTINCT ie.cancellation_state IGNORE NULLS), ',') AS list_cancellation_state,
+      ARRAY_TO_STRING(ARRAY_AGG(DISTINCT ie.cancellation_reason IGNORE NULLS), ',') AS list_cancellation_reason,
+		FROM
+			`sofia-data-305018.backend_db_20240702.invoice_electronicvoucher` AS ie
+		JOIN
+			`sofia-data-305018.backend_db_20240702.invoice_electronicvoucheritems` AS ie_items
+		ON ie.id = ie_items.electronic_voucher_id
+		WHERE
+			electronic_voucher_id IS NOT NULL
+			AND ie_items.description IS NOT NULL
+			AND ie.deleted IS NULL
+			AND ie_items.deleted IS NULL
+		GROUP BY 
+      ie_items.electronic_voucher_id
+	),
 	diseasecase_db AS (
 		SELECT
 			CAST(diseasecase.id AS INT64) AS disease_case_id,
@@ -340,11 +384,6 @@ WITH
 			LOWER(TRIM( IF(caseeventfinalletterdata.cpt_descriptions = 'None' OR caseeventfinalletterdata.cpt_descriptions = '', NULL, caseeventfinalletterdata.cpt_descriptions) )) AS caseeventfinalletterdata_cpt_descriptions,
 			--caseeventfinalletterdata.observations AS caseeventfinalletterdata_observations,
 
-			-- Ver en que parte del proceso esta el caso: falta dictaminacion administrativa, predictaminacion medica (ver si va o no)
-				-- Si se acepta, cotizacion y programacion del evento (en el caso que lo necesite)
-				-- Programacion 
-				-- Esto esta en caseevent_state
-
 		FROM
 			`sofia-data-305018.backend_db_20240702.services_caseevent` AS caseevent
 		LEFT JOIN
@@ -380,7 +419,7 @@ WITH
 			CAST(services.provided_by_object_id AS INT64) AS services_provided_by_object_id, -- proveedor doctor, doctor amigo o farmacia-clinica-hospitales
 			CAST(services.provided_by_content_type_id AS INT64) AS services_provided_by_content_type_id, -- tipo de proveedor
 			CASE
-				WHEN services.provided_by_content_type_id = 57 THEN 'hospital-pharmacy-lab'
+				WHEN services.provided_by_content_type_id = 57 THEN 'hospital_pharmacy_lab'
 				WHEN services.provided_by_content_type_id = 58 THEN 'doctor_out_of_network'
 				WHEN services.provided_by_content_type_id = 59 THEN 'doctor_in_network'
 				ELSE CAST(services.provided_by_content_type_id AS STRING)
@@ -415,14 +454,19 @@ WITH
 			servicecomment.comment AS servicecomment_comments,
 
 			# proveedor 
+      		providerbranchoffice.admin_user_id AS provider_admin_user_id,
 			providerbranchoffice.name AS provider_name,
 			providercategory.name AS provider_category_name,
 			----providers_provider.website AS provider_website,
 			providers_provider.state AS provider_state,
 			--providers_provider.notes AS --provider_notes,
+			providers_provider.contract_category AS provider_contract_category,
 
 			# informacion del doctor
+			providers_doctorfriend.id AS doctorfriend_id,
 			providers_doctorfriend.name AS doctorfriend_name,
+      		providers_doctor.id AS doctor_id,
+      		providers_doctor.user_id AS doctor_user_id,
 			providers_doctor.nickname AS doctor_nickname, 
 			providers_doctor.member_name AS doctor_name,
 			providers_doctor.descriptor AS doctor_descriptor, 
@@ -451,6 +495,19 @@ WITH
 			# primas
 			healthplan_healthplan.relationship_beneficiary_with_owner,
 			healthplan_healthplan.owner_type,
+			
+			CAST(services.electronic_voucher_id AS INT64) AS electronic_voucher_id,
+			voucher_item_db.items AS voucher_item_items,
+			voucher_item_db.total_items_quantity AS voucher_item_total_items_quantity,
+			voucher_item_db.total_discount_cents AS voucher_item_total_discount_cents,
+			voucher_item_db.total_unit_value_cents AS voucher_item_total_unit_value_cents,
+			voucher_item_db.main_item AS voucher_item_main_item,
+			voucher_item_db.list_unit_key AS voucher_item_list_unit_key,
+			voucher_item_db.parsed_product_service_key AS voucher_item_parsed_product_service_key,
+			voucher_item_db.created_at AS voucher_item_created_ts,
+			voucher_item_db.is_cancellable AS voucher_item_is_cancellable,
+			voucher_item_db.list_cancellation_state AS voucher_item_list_cancellation_state,
+			voucher_item_db.list_cancellation_reason AS voucher_item_list_cancellation_reason,
 
 		FROM
 				`sofia-data-305018.backend_db_20240702.services_service` AS services
@@ -498,12 +555,12 @@ WITH
 
 
 		LEFT JOIN 
-			app_user AS app_user_doctor 
+			app_user AS app_user_doctor  -- elimianr
 		ON providers_doctor.user_id = app_user_doctor.id
 
 
 		LEFT JOIN 
-			app_user AS app_user_provider 
+			app_user AS app_user_provider -- eliminar
 		ON providerbranchoffice.admin_user_id = app_user_provider.id
 
 
@@ -511,12 +568,16 @@ WITH
 			app_member 
 		ON services.member_id = app_member.id
 
+
+		LEFT JOIN
+			voucher_item_db
+		ON services.electronic_voucher_id = voucher_item_db.electronic_voucher_id
+
 		WHERE   
 				services.member_id IS NOT NULL
 				AND services.id IS NOT NULL
 				AND services.disease_case_id IS NOT NULL
 				AND services.health_plan_id IS NOT NULL
-				--AND services.uuid IS NOT NULL
 				AND services.deleted IS NULL
 				AND (servicecomment.deleted = 'None' OR servicecomment.deleted IS NULL)
 				AND process_state != 'CANCELLED'
@@ -537,8 +598,13 @@ SELECT
 
 	services_related_service_id,
 	services_health_plan_id,
-  caseevent_invoice_id,
+    caseevent_invoice_id,
 	--services_uuid,
+
+	provider_admin_user_id,
+	doctorfriend_id,
+	doctor_id,
+	doctor_user_id,
 
 	services_cpt,
 	services_diagnosis_icd,
@@ -581,10 +647,10 @@ SELECT
 	services_occurrence_ts,
 	servicecomment_created_ts,
 	caseevent_created_ts,
-  caseevent_occurrence_ts,
+    caseevent_occurrence_ts,
 	caseevent_pause_start_ts,
-  caseevent_discharge_start_ts,
-  caseevent_medical_monitoring_ts,
+    caseevent_discharge_start_ts,
+    caseevent_medical_monitoring_ts,
 	eventcomment_created_ts,
 	caseeventsummary_created_ts,
 	caseeventfinalletterdata_created_ts,
@@ -634,6 +700,7 @@ SELECT
 	----provider_website,
 	provider_state,
 	--provider_notes,
+	provider_contract_category,
 
 	# informacion del doctor
 	doctorfriend_name,
@@ -666,6 +733,19 @@ SELECT
 	relationship_beneficiary_with_owner,
 	owner_type,
 
+	electronic_voucher_id,
+	voucher_item_items,
+	voucher_item_total_items_quantity,
+	voucher_item_total_discount_cents,
+	voucher_item_total_unit_value_cents,
+	voucher_item_main_item,
+	voucher_item_list_unit_key,
+	voucher_item_parsed_product_service_key,
+	voucher_item_created_ts,
+	voucher_item_is_cancellable,
+	voucher_item_list_cancellation_state,
+	voucher_item_list_cancellation_reason,
+
 FROM(
   SELECT
 		services_db.member_id	AS member_id_from_service,
@@ -673,7 +753,12 @@ FROM(
 		services_db.disease_case_id AS disease_case_id_from_service,
 		services_db.case_event_id AS case_event_id_from_service,
 
-    events_db.member_id AS member_id_from_event,
+		services_db.provider_admin_user_id,
+		services_db.doctorfriend_id,
+		services_db.doctor_id,
+		services_db.doctor_user_id,
+
+    	events_db.member_id AS member_id_from_event,
 		events_db.disease_case_id AS disease_case_id_from_event,
 		events_db.case_event_id AS case_event_id_from_event,
 		events_db.case_event_origin_diagnosis_icd,
@@ -681,8 +766,8 @@ FROM(
 		events_db.caseevent_created_ts,
 		events_db.caseevent_occurrence_ts,
 		events_db.caseevent_pause_start_ts,
-    events_db.caseevent_discharge_start_ts,
-    events_db.caseevent_medical_monitoring_ts,
+    	events_db.caseevent_discharge_start_ts,
+    	events_db.caseevent_medical_monitoring_ts,
 
 		events_db.caseevent_state,
 		events_db.caseevent_step,
@@ -704,7 +789,7 @@ FROM(
 		events_db.caseevent_discharge_reason,
 		events_db.caseevent_quote_and_scheduling_ruling_notes,
 		events_db.caseevent_medical_procedure_ruling_notes,
-    events_db.caseevent_invoice_id,
+    	events_db.caseevent_invoice_id,
 
 		events_db.eventcomment_author_id,
 		events_db.eventcomment_created_ts,
@@ -765,6 +850,7 @@ FROM(
 		--services_db.provider_website,
 		services_db.provider_state,
 		--services_db.provider_notes,
+		services_db.provider_contract_category,
 
 		# informacion del doctor
 		services_db.doctorfriend_name,
@@ -796,6 +882,19 @@ FROM(
 		# primas
 		services_db.relationship_beneficiary_with_owner,
 		services_db.owner_type,
+
+		services_db.electronic_voucher_id,
+		services_db.voucher_item_items,
+		services_db.voucher_item_total_items_quantity,
+		services_db.voucher_item_total_discount_cents,
+		services_db.voucher_item_total_unit_value_cents,
+		services_db.voucher_item_main_item,
+		services_db.voucher_item_list_unit_key,
+		services_db.voucher_item_parsed_product_service_key,
+		services_db.voucher_item_created_ts,
+		services_db.voucher_item_is_cancellable,
+		services_db.voucher_item_list_cancellation_state,
+		services_db.voucher_item_list_cancellation_reason,
   FROM
     services_db
   FULL JOIN

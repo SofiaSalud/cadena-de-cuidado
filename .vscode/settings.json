@@ -1,5 +1,8 @@
 {
     "vscode-bigquery.projects": [
         "sofia-data-305018"
+    ],
+    "vscode-bigquery.pinned-projects": [
+        "sofia-data-305018"
     ]
 }
